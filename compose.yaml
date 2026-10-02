@@ -1,0 +1,15 @@
+services:
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "127.0.0.1:3307:3306"
+    environment:
+      MYSQL_DATABASE: foco_hotel
+      MYSQL_USER: foco
+      MYSQL_PASSWORD: foco_local
+      MYSQL_ROOT_PASSWORD: root_local
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
