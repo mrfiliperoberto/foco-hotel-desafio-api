@@ -34,4 +34,14 @@ class Reservation extends Model
     {
         return $this->hasMany(ReservationGuest::class);
     }
+
+    public function dailies(): HasMany
+    {
+        return $this->hasMany(ReservationDaily::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(ReservationPayment::class);
+    }
 }
