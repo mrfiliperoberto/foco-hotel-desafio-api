@@ -7,6 +7,7 @@ use App\Http\Requests\StoreRoomRequest;
 use App\Http\Requests\UpdateRoomRequest;
 use App\Models\Room;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class RoomController extends Controller
 {
@@ -48,5 +49,26 @@ class RoomController extends Controller
         return response()->json([
             'data' => $room,
         ]);
+    }
+
+    public function destroy(Room $room): JsonResponse
+    {
+        return DB::transaction(function () use ($room): JsonResponse {
+            $lockedRoom = Room::whereKey($room->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedRoom->reservations()->exists()) {
+                return response()->json([
+                    'message' => 'Não é possível excluir um quarto com reservas.',
+                ], 409);
+            }
+
+            $lockedRoom->delete();
+
+            return response()->json([
+                'message' => 'Quarto excluído com sucesso.',
+            ]);
+        });
     }
 }
