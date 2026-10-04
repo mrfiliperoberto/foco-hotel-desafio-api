@@ -4,4 +4,4 @@ use App\Http\Controllers\Api\RoomController;
 use Illuminate\Support\Facades\Route;
 
 Route::apiResource('rooms', RoomController::class)
-    ->only(['index', 'store', 'show']);
+    ->only(['index', 'store', 'show', 'update']);

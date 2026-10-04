@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreRoomRequest;
+use App\Http\Requests\UpdateRoomRequest;
 use App\Models\Room;
 use Illuminate\Http\JsonResponse;
 
@@ -31,6 +32,17 @@ class RoomController extends Controller
 
     public function show(Room $room): JsonResponse
     {
+        $room->load('hotel');
+
+        return response()->json([
+            'data' => $room,
+        ]);
+    }
+
+    public function update(UpdateRoomRequest $request, Room $room): JsonResponse
+    {
+        $room->update($request->validated());
+
         $room->load('hotel');
 
         return response()->json([
