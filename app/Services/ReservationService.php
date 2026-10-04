@@ -56,8 +56,8 @@ class ReservationService
                 ->firstOrFail();
 
             $hasConflict = $room->reservations()
-                ->where('check_in', '<', $data['check_out'])
-                ->where('check_out', '>', $data['check_in'])
+                ->whereDate('check_in', '<', $data['check_out'])
+                ->whereDate('check_out', '>', $data['check_in'])
                 ->exists();
 
             if ($hasConflict) {
