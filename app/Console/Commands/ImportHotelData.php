@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Hotel;
 use App\Models\Room;
+use App\Services\ReservationXmlImporter;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -87,6 +88,14 @@ class ImportHotelData extends Command
 
             $this->info("Hotéis processados: {$counts[0]}.");
             $this->info("Quartos processados: {$counts[1]}.");
+
+            $result = app(ReservationXmlImporter::class)->import();
+
+            $this->info("Reservas processadas: {$result['reservations']}.");
+
+            foreach ($result['warnings'] as $warning) {
+                $this->warn($warning);
+            }
 
             return self::SUCCESS;
         } catch (Throwable $exception) {
