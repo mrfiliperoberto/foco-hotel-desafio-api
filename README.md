@@ -273,6 +273,27 @@ A API de novas reservas rejeita diárias fora do período da estadia.
 O método de pagamento `1` é preservado como código textual. Os arquivos
 não fornecem seu significado.
 
+## Documentação OpenAPI / Swagger
+
+A especificação OpenAPI 3.0.0 está em [docs/openapi.yaml](docs/openapi.yaml).
+
+Ela descreve todas as operações da API, os campos das requisições,
+os modelos das respostas e os principais erros HTTP.
+
+Para visualizar:
+
+1. Abra https://editor.swagger.io/.
+2. Use File > Import file e selecione `docs/openapi.yaml`.
+3. Consulte as operações nas seções Quartos e Reservas.
+
+O endereço configurado é `http://127.0.0.1:8001/api`.
+Os IDs dos exemplos devem ser substituídos por IDs existentes no banco.
+
+A visualização da documentação não exige que a API esteja rodando.
+Para executar requisições, a API e o banco precisam estar ativos.
+Chamadas pelo editor online podem sofrer restrições do navegador;
+nesse caso, utilize PowerShell, curl ou Postman.
+
 ## API
 
 As URLs utilizam IDs internos, não os códigos externos dos XMLs.

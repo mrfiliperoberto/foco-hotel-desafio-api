@@ -1,0 +1,622 @@
+openapi: 3.0.0
+
+info:
+  title: Foco Hotel API
+  version: 1.0.0
+  description: |
+    API do desafio técnico da Foco Multimídia.
+
+    Os identificadores enviados nas rotas e requisições são IDs internos
+    do banco, não os códigos externos dos XMLs.
+
+    Envie Accept: application/json e, nas operações com corpo,
+    Content-Type: application/json.
+
+    Valores monetários são strings com ponto decimal.
+    A API não implementa autenticação neste desafio.
+
+servers:
+  - url: http://127.0.0.1:8001/api
+    description: Ambiente de desenvolvimento local
+
+tags:
+  - name: Quartos
+    description: Gerenciamento de quartos e acomodações
+  - name: Reservas
+    description: Criação de reservas com hóspedes, diárias e pagamentos
+
+paths:
+  /rooms:
+    get:
+      tags: [Quartos]
+      summary: Listar quartos
+      operationId: listRooms
+      description: |
+        Lista quartos com seus hotéis, ordenados pelo ID interno.
+        Cada página contém até 15 registros.
+      parameters:
+        - name: page
+          in: query
+          description: Número da página
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        '200':
+          description: Lista paginada de quartos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomPage'
+
+    post:
+      tags: [Quartos]
+      summary: Criar um quarto
+      operationId: createRoom
+      description: |
+        Cria um quarto associado a um hotel existente.
+        external_id é reservado à importação XML e não pode ser atribuído.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreRoom'
+            example:
+              hotel_id: 1
+              name: Quarto Standard
+      responses:
+        '201':
+          description: Quarto criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /rooms/{room}:
+    parameters:
+      - name: room
+        in: path
+        required: true
+        description: ID interno do quarto
+        schema:
+          type: integer
+        example: 1
+
+    get:
+      tags: [Quartos]
+      summary: Consultar um quarto
+      operationId: showRoom
+      responses:
+        '200':
+          description: Quarto encontrado, incluindo o hotel relacionado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Quartos]
+      summary: Atualizar o nome de um quarto
+      operationId: replaceRoomName
+      description: |
+        Atualiza somente o nome.
+        hotel_id e external_id são proibidos.
+        O comportamento desta operação é igual ao PATCH.
+      requestBody:
+        $ref: '#/components/requestBodies/UpdateRoom'
+      responses:
+        '200':
+          description: Quarto atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    patch:
+      tags: [Quartos]
+      summary: Atualizar o nome de um quarto
+      operationId: updateRoomName
+      description: |
+        O nome é obrigatório.
+        hotel_id e external_id são proibidos.
+      requestBody:
+        $ref: '#/components/requestBodies/UpdateRoom'
+      responses:
+        '200':
+          description: Quarto atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    delete:
+      tags: [Quartos]
+      summary: Excluir um quarto
+      operationId: deleteRoom
+      description: |
+        A exclusão é permitida somente se o quarto não tiver reservas.
+        Retorna 200 com mensagem JSON quando concluída.
+      responses:
+        '200':
+          description: Quarto excluído
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              example:
+                message: Quarto excluído com sucesso.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Exclusão bloqueada porque o quarto possui reservas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              example:
+                message: Não é possível excluir um quarto com reservas.
+
+  /reservations:
+    post:
+      tags: [Reservas]
+      summary: Criar uma reserva
+      operationId: createReservation
+      description: |
+        Cria a reserva e seus registros relacionados em uma transação.
+
+        Regras:
+        - O quarto deve existir.
+        - A saída deve ocorrer depois da entrada.
+        - Deve existir ao menos um hóspede.
+        - Cada noite deve ter uma diária.
+        - Datas de diárias não podem se repetir.
+        - Diárias devem ocorrer na entrada ou depois, e antes da saída.
+        - O total deve corresponder à soma das diárias.
+        - Pagamentos são opcionais e sua soma não pode ultrapassar o total.
+        - Valores monetários não podem ser negativos.
+        - external_id é proibido.
+
+        Datas históricas são aceitas.
+        Uma nova entrada no dia da saída de outra reserva é permitida.
+        Cada quarto representa uma unidade reservável.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoreReservation'
+            example:
+              room_id: 1
+              check_in: '2026-12-01'
+              check_out: '2026-12-03'
+              total: '200.00'
+              guests:
+                - first_name: Ana
+                  last_name: Silva
+                  phone: '11999999999'
+              dailies:
+                - date: '2026-12-01'
+                  value: '100.00'
+                - date: '2026-12-02'
+                  value: '100.00'
+              payments:
+                - method: '1'
+                  value: '50.00'
+      responses:
+        '201':
+          description: Reserva criada com seus registros relacionados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '404':
+          description: |
+            Quarto não encontrado no momento da gravação.
+            Um room_id inexistente na validação inicial retorna 422.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '409':
+          description: O quarto possui uma reserva sobreposta ao período solicitado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              example:
+                message: O quarto já possui uma reserva nesse período.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+components:
+  requestBodies:
+    UpdateRoom:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateRoom'
+          example:
+            name: Quarto Standard atualizado
+
+  responses:
+    NotFound:
+      description: Quarto não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+
+    ValidationError:
+      description: Dados inválidos ou campos obrigatórios ausentes
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+
+  schemas:
+    Money:
+      type: string
+      pattern: '^\d{1,10}(?:\.\d{1,2})?$'
+      description: |
+        Valor não negativo, com até 10 dígitos inteiros e 2 casas decimais.
+        Deve ser enviado como string, usando ponto decimal.
+      example: '100.00'
+
+    StoreRoom:
+      type: object
+      description: external_id é proibido nesta operação.
+      required: [hotel_id, name]
+      properties:
+        hotel_id:
+          type: integer
+          description: ID interno de um hotel existente
+          example: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Quarto Standard
+
+    UpdateRoom:
+      type: object
+      description: hotel_id e external_id são proibidos nesta operação.
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Quarto Standard atualizado
+
+    StoreReservation:
+      type: object
+      description: |
+        external_id é proibido.
+        IDs dos exemplos devem ser substituídos por IDs existentes no banco.
+        As regras que relacionam datas e valores são verificadas pela aplicação.
+      required:
+        - room_id
+        - check_in
+        - check_out
+        - total
+        - guests
+        - dailies
+      properties:
+        room_id:
+          type: integer
+          description: ID interno de um quarto existente
+          example: 1
+        check_in:
+          type: string
+          format: date
+          example: '2026-12-01'
+        check_out:
+          type: string
+          format: date
+          description: Deve ser posterior ao check-in
+          example: '2026-12-03'
+        total:
+          $ref: '#/components/schemas/Money'
+        guests:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/GuestInput'
+        dailies:
+          type: array
+          minItems: 1
+          maxItems: 365
+          description: Uma diária para cada noite, sem datas repetidas
+          items:
+            $ref: '#/components/schemas/DailyInput'
+        payments:
+          type: array
+          maxItems: 100
+          description: Opcional; a soma não pode ultrapassar o total
+          items:
+            $ref: '#/components/schemas/PaymentInput'
+
+    GuestInput:
+      type: object
+      additionalProperties: false
+      required: [first_name, last_name, phone]
+      properties:
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Ana
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: Silva
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: '11999999999'
+
+    DailyInput:
+      type: object
+      additionalProperties: false
+      required: [date, value]
+      properties:
+        date:
+          type: string
+          format: date
+          description: Deve estar entre o check-in, inclusive, e o check-out, exclusivo
+          example: '2026-12-01'
+        value:
+          $ref: '#/components/schemas/Money'
+
+    PaymentInput:
+      type: object
+      additionalProperties: false
+      required: [method, value]
+      properties:
+        method:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Código textual; não há integração com gateway
+          example: '1'
+        value:
+          $ref: '#/components/schemas/Money'
+
+    RecordMetadata:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Hotel:
+      allOf:
+        - $ref: '#/components/schemas/RecordMetadata'
+        - type: object
+          properties:
+            external_id:
+              type: integer
+              nullable: true
+              example: 1
+            name:
+              type: string
+              example: Hotel Foco Prime
+
+    Room:
+      allOf:
+        - $ref: '#/components/schemas/RecordMetadata'
+        - type: object
+          properties:
+            external_id:
+              type: integer
+              nullable: true
+              description: Pode não aparecer na resposta de criação
+            hotel_id:
+              type: integer
+              example: 1
+            name:
+              type: string
+              example: Quarto Standard
+            hotel:
+              $ref: '#/components/schemas/Hotel'
+
+    Guest:
+      allOf:
+        - $ref: '#/components/schemas/RecordMetadata'
+        - type: object
+          properties:
+            reservation_id:
+              type: integer
+            first_name:
+              type: string
+              example: Ana
+            last_name:
+              type: string
+              example: Silva
+            phone:
+              type: string
+              example: '11999999999'
+
+    Daily:
+      allOf:
+        - $ref: '#/components/schemas/RecordMetadata'
+        - type: object
+          properties:
+            reservation_id:
+              type: integer
+            date:
+              type: string
+              format: date-time
+              description: Data serializada pelo Eloquent em formato ISO 8601
+              example: '2026-12-01T00:00:00.000000Z'
+            value:
+              $ref: '#/components/schemas/Money'
+
+    Payment:
+      allOf:
+        - $ref: '#/components/schemas/RecordMetadata'
+        - type: object
+          properties:
+            reservation_id:
+              type: integer
+            method:
+              type: string
+              example: '1'
+            value:
+              $ref: '#/components/schemas/Money'
+
+    Reservation:
+      allOf:
+        - $ref: '#/components/schemas/RecordMetadata'
+        - type: object
+          properties:
+            external_id:
+              type: integer
+              nullable: true
+              description: Pode não aparecer na resposta de criação
+            room_id:
+              type: integer
+              example: 1
+            check_in:
+              type: string
+              format: date-time
+              example: '2026-12-01T00:00:00.000000Z'
+            check_out:
+              type: string
+              format: date-time
+              example: '2026-12-03T00:00:00.000000Z'
+            total:
+              $ref: '#/components/schemas/Money'
+            room:
+              $ref: '#/components/schemas/Room'
+            guests:
+              type: array
+              items:
+                $ref: '#/components/schemas/Guest'
+            dailies:
+              type: array
+              items:
+                $ref: '#/components/schemas/Daily'
+            payments:
+              type: array
+              items:
+                $ref: '#/components/schemas/Payment'
+
+    RoomResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Room'
+
+    ReservationResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Reservation'
+
+    RoomPage:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Room'
+        first_page_url:
+          type: string
+        from:
+          type: integer
+          nullable: true
+        last_page:
+          type: integer
+        last_page_url:
+          type: string
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaginationLink'
+        next_page_url:
+          type: string
+          nullable: true
+        path:
+          type: string
+        per_page:
+          type: integer
+          example: 15
+        prev_page_url:
+          type: string
+          nullable: true
+        to:
+          type: integer
+          nullable: true
+        total:
+          type: integer
+
+    PaginationLink:
+      type: object
+      properties:
+        url:
+          type: string
+          nullable: true
+        label:
+          type: string
+        page:
+          type: integer
+          nullable: true
+        active:
+          type: boolean
+
+    Message:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    ValidationError:
+      type: object
+      required: [message, errors]
+      properties:
+        message:
+          type: string
+          description: Resumo dos erros de validação
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+      example:
+        message: The name field is required.
+        errors:
+          name:
+            - The name field is required.
