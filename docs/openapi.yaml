@@ -21,7 +21,7 @@ servers:
 
 tags:
   - name: Quartos
-    description: Gerenciamento de quartos e acomodações
+    description: Gerenciamento de quartos e consulta de disponibilidade
   - name: Reservas
     description: Criação de reservas com hóspedes, diárias e pagamentos
 
@@ -73,6 +73,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RoomResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /rooms/available:
+    get:
+      tags: [Quartos]
+      summary: Consultar quartos disponíveis
+      operationId: listAvailableRooms
+      description: |
+        Lista quartos de um hotel sem reservas sobrepostas ao período,
+        ordenados pelo ID interno.
+
+        hotel_id, check_in e check_out são obrigatórios.
+        As datas devem seguir o formato YYYY-MM-DD.
+        A saída deve ser posterior à entrada.
+
+        Uma entrada no dia da saída de outra reserva é permitida.
+        Retorna até 15 quartos por página, com o hotel relacionado.
+        Os links de paginação preservam os filtros.
+
+        Uma busca sem quartos disponíveis retorna 200 com data vazio.
+
+        Esta consulta não bloqueia quartos nem garante uma reserva.
+        A disponibilidade é verificada novamente ao criar a reserva.
+      parameters:
+        - name: hotel_id
+          in: query
+          required: true
+          description: ID interno de um hotel existente
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+        - name: check_in
+          in: query
+          required: true
+          description: Data de entrada no formato YYYY-MM-DD
+          schema:
+            type: string
+            format: date
+          example: '2026-12-01'
+        - name: check_out
+          in: query
+          required: true
+          description: Data de saída, posterior à entrada
+          schema:
+            type: string
+            format: date
+          example: '2026-12-03'
+        - name: page
+          in: query
+          description: Número da página
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+      responses:
+        '200':
+          description: Lista paginada de quartos disponíveis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomPage'
         '422':
           $ref: '#/components/responses/ValidationError'
 
@@ -193,6 +256,9 @@ paths:
         Datas históricas são aceitas.
         Uma nova entrada no dia da saída de outra reserva é permitida.
         Cada quarto representa uma unidade reservável.
+
+        A disponibilidade é verificada no momento da criação,
+        mesmo que o quarto tenha aparecido em uma consulta anterior.
       requestBody:
         required: true
         content:

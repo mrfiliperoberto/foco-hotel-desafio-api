@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/mrfiliperoberto/foco-hotel-desafio-api/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/mrfiliperoberto/foco-hotel-desafio-api/actions/workflows/tests.yml)
 
-API REST para gerenciamento de quartos e criação de reservas, com importação de dados de hotéis a partir de XML.
+API REST para gerenciamento de quartos, consulta de disponibilidade e criação de reservas, com importação de dados de hotéis a partir de XML.
 
 Desenvolvida em PHP e Laravel para o desafio técnico da Foco Multimídia.
 
@@ -32,6 +32,7 @@ Escolha uma das opções abaixo.
 - Importação de hotéis, quartos, reservas, hóspedes, diárias e pagamentos.
 - Reimportação sem duplicação das entidades principais.
 - CRUD de quartos.
+- Consulta de quartos disponíveis por hotel e período.
 - Criação de reservas com verificação de disponibilidade.
 - Validação de datas e valores.
 - Respostas da API em JSON.
@@ -189,7 +190,7 @@ docker compose down
 
 O banco é persistido no volume `mysql_data`. O comando acima mantém esse volume.
 
-### Alterações no código
+### Alterações no código e nas configurações
 
 O código é copiado para a imagem durante a construção. Após modificar arquivos da aplicação, reconstrua e recrie o serviço:
 
@@ -197,13 +198,13 @@ O código é copiado para a imagem durante a construção. Após modificar arqui
 docker compose up -d --build app
 ```
 
-Alterações no `.env` também exigem recriar o serviço para atualizar as variáveis fornecidas pelo Compose:
+Alterações no `.env` exigem recriar o serviço para atualizar as variáveis fornecidas pelo Compose:
 
 ```bash
 docker compose up -d --force-recreate app
 ```
 
-A imagem utiliza o servidor de desenvolvimento do Laravel para execução e avaliação local.
+A imagem utiliza o servidor de desenvolvimento do Laravel com `--no-reload`, preservando as variáveis de ambiente fornecidas pelo Compose.
 
 O Compose não inicia o agendador automaticamente. Configure o CRON ou execute `schedule:work`, conforme a seção de agendamento.
 
@@ -278,17 +279,19 @@ docker compose logs --tail 20 mysql
 
 ### Preparar e iniciar a aplicação
 
+Se o serviço Docker `app` estiver ativo, pare-o antes de utilizar a mesma porta:
+
+```bash
+docker compose stop app
+```
+
+Depois execute:
+
 ```bash
 php artisan config:clear
 php artisan migrate
 php artisan hotel-data:import
 php artisan serve --port=8001
-```
-
-Se o serviço Docker `app` estiver ativo, pare-o antes de utilizar a mesma porta:
-
-```bash
-docker compose stop app
 ```
 
 Endereço base da API:
@@ -459,6 +462,7 @@ As URLs utilizam IDs internos, não os códigos externos dos XMLs.
 | Verbo | Rota | Operação |
 |---|---|---|
 | GET | `/api/rooms` | Lista quartos com paginação |
+| GET | `/api/rooms/available` | Consulta quartos disponíveis por hotel e período |
 | GET | `/api/rooms/{id}` | Consulta um quarto |
 | POST | `/api/rooms` | Cria um quarto |
 | PUT/PATCH | `/api/rooms/{id}` | Atualiza o nome de um quarto |
@@ -493,6 +497,49 @@ A resposta inclui os hotéis relacionados e os dados de paginação. Cada págin
 ```text
 GET /api/rooms?page=2
 ```
+
+### Consultar quartos disponíveis
+
+Informe o ID interno do hotel e as datas de entrada e saída:
+
+```text
+GET /api/rooms/available?hotel_id=1&check_in=2026-12-01&check_out=2026-12-03
+```
+
+Substitua `hotel_id` por um ID existente no banco.
+
+Exemplo no PowerShell:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://127.0.0.1:8001/api/rooms/available?hotel_id=1&check_in=2026-12-01&check_out=2026-12-03" `
+    -Headers @{ Accept = "application/json" } |
+    ConvertTo-Json -Depth 10
+```
+
+Exemplo com curl:
+
+```bash
+curl -H "Accept: application/json" \
+  "http://127.0.0.1:8001/api/rooms/available?hotel_id=1&check_in=2026-12-01&check_out=2026-12-03"
+```
+
+A resposta contém apenas quartos desse hotel sem reservas sobrepostas ao período, ordenados pelo ID interno e com paginação de até 15 registros.
+
+Os hotéis relacionados são incluídos na resposta. Os links de paginação preservam os filtros.
+
+| Parâmetro | Obrigatório | Descrição |
+|---|---|---|
+| `hotel_id` | Sim | ID interno de um hotel existente |
+| `check_in` | Sim | Entrada no formato `YYYY-MM-DD` |
+| `check_out` | Sim | Saída no formato `YYYY-MM-DD`, posterior à entrada |
+| `page` | Não | Página desejada |
+
+Dados inválidos retornam 422. Uma busca sem quartos disponíveis retorna 200 com uma lista `data` vazia.
+
+Uma entrada no dia da saída de outra reserva é permitida.
+
+A consulta não cria reservas, não altera registros e não bloqueia quartos. A disponibilidade pode mudar após a consulta e é verificada novamente, dentro da transação, ao criar uma reserva.
 
 ### Criar um quarto
 
@@ -721,15 +768,21 @@ Os testes utilizam SQLite em memória, configurado em `phpunit.xml`, preservando
 Resultado verificado:
 
 ```text
-22 passed (173 assertions)
+31 passed (216 assertions)
 ```
 
 ### Cobertura funcional
 
 - CRUD e validação de quartos.
 - Proteção de quartos com reservas.
+- Consulta de disponibilidade por hotel e período.
+- Exclusão de quartos com diferentes tipos de sobreposição.
+- Disponibilidade em períodos adjacentes ou distantes.
+- Validação dos filtros de disponibilidade.
+- Paginação com preservação dos filtros.
+- Consulta de disponibilidade sem alterações nas reservas.
 - Criação de reservas com registros relacionados.
-- Sobreposição de estadias e datas adjacentes.
+- Sobreposição de estadias e datas adjacentes na criação.
 - Datas, valores e pagamentos inválidos.
 - Importação e reimportação sem duplicações.
 - Preservação da inconsistência conhecida com aviso.
@@ -780,6 +833,7 @@ A integração contínua verifica a aplicação com SQLite. Ela não executa a c
 - A importação não remove entidades principais ausentes do XML.
 - Atualizações de nomes de registros importados podem ser sobrescritas na próxima importação.
 - A importação histórica não aplica a mesma verificação de disponibilidade utilizada na criação de reservas pela API.
+- A consulta de disponibilidade não garante uma reserva nem bloqueia quartos.
 - O agendamento depende de CRON externo ou de um processo `schedule:work` ativo.
 - O ambiente Docker utiliza o servidor de desenvolvimento do Laravel.
 
@@ -792,7 +846,10 @@ Dockerfile
 compose.yaml
 app/Console/Commands/ImportHotelData.php
 app/Http/Controllers/Api/
-app/Http/Requests/
+app/Http/Requests/AvailableRoomsRequest.php
+app/Http/Requests/StoreRoomRequest.php
+app/Http/Requests/UpdateRoomRequest.php
+app/Http/Requests/StoreReservationRequest.php
 app/Models/
 app/Services/ReservationService.php
 app/Services/ReservationXmlImporter.php
@@ -801,7 +858,10 @@ database/xml/
 docs/openapi.yaml
 routes/api.php
 routes/console.php
-tests/Feature/
+tests/Feature/AvailableRoomsTest.php
+tests/Feature/RoomApiTest.php
+tests/Feature/ReservationApiTest.php
+tests/Feature/XmlImportTest.php
 ```
 
 Os Requests validam a entrada, os Controllers produzem respostas HTTP, os Services executam as regras e os Models representam os dados e relações.
