@@ -152,6 +152,72 @@ Um quarto com reservas não pode ser excluído.
 Os registros de hóspedes, diárias e pagamentos são removidos caso sua reserva
 seja excluída.
 
+### Diagrama de relacionamentos
+
+```mermaid
+erDiagram
+    hotels ||--o{ rooms : possui
+    rooms ||--o{ reservations : recebe
+    reservations ||--o{ reservation_guests : inclui
+    reservations ||--o{ reservation_dailies : inclui
+    reservations ||--o{ reservation_payments : registra
+
+    hotels {
+        bigint id PK
+        bigint external_id UK "Opcional; código do XML"
+        varchar name
+    }
+
+    rooms {
+        bigint id PK
+        bigint external_id UK "Opcional; código do XML"
+        bigint hotel_id FK
+        varchar name
+    }
+
+    reservations {
+        bigint id PK
+        bigint external_id UK "Opcional; código do XML"
+        bigint room_id FK
+        date check_in
+        date check_out
+        decimal total "Precisão 12, escala 2"
+    }
+
+    reservation_guests {
+        bigint id PK
+        bigint reservation_id FK
+        varchar first_name
+        varchar last_name
+        varchar phone
+    }
+
+    reservation_dailies {
+        bigint id PK
+        bigint reservation_id FK
+        date date
+        decimal value "Precisão 12, escala 2"
+    }
+
+    reservation_payments {
+        bigint id PK
+        bigint reservation_id FK
+        varchar method
+        decimal value "Precisão 12, escala 2"
+    }
+```
+
+Cada quarto pertence a um hotel e pode receber várias reservas em períodos
+diferentes. Cada reserva pertence a um quarto e possui registros de hóspedes,
+diárias e, opcionalmente, pagamentos.
+
+`PK` indica a chave primária, `FK` indica uma chave estrangeira e `UK` indica
+uma restrição de unicidade. A combinação `reservation_id` e `date` também
+é única em `reservation_dailies`.
+
+Todas essas tabelas possuem `created_at` e `updated_at`, omitidos no diagrama
+para facilitar a leitura.
+
 ## Importação XML
 
 Arquivos originais:
