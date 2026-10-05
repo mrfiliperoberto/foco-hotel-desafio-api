@@ -1,5 +1,7 @@
 # Foco Hotel API
 
+[![Tests](https://github.com/mrfiliperoberto/foco-hotel-desafio-api/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/mrfiliperoberto/foco-hotel-desafio-api/actions/workflows/tests.yml)
+
 API REST para gerenciamento de quartos e criação de reservas, com importação de dados de hotéis a partir de XML.
 
 Desenvolvida em PHP e Laravel para o desafio técnico da Foco Multimídia.
